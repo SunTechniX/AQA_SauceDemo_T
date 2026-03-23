@@ -21,13 +21,15 @@ from datetime import datetime
 
 
 class Colors:
-    """Цвета для вывода в консоль"""
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    BOLD = '\033[1m'
-    RESET = '\033[0m'
+    """Цвета для вывода в консоль (отключаются в CI)"""
+    _use_colors = not os.environ.get("CI", "").lower() == "true"
+    
+    GREEN = '\033[92m' if _use_colors else ''
+    RED = '\033[91m' if _use_colors else ''
+    YELLOW = '\033[93m' if _use_colors else ''
+    BLUE = '\033[94m' if _use_colors else ''
+    BOLD = '\033[1m' if _use_colors else ''
+    RESET = '\033[0m' if _use_colors else ''
 
 
 class CodeAnalyzer:
