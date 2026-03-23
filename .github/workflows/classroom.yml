@@ -49,12 +49,12 @@ jobs:
           if grep -q '"passed": true' tools/output/structure_result.json 2>/dev/null; then
             echo "score=10" >> $GITHUB_OUTPUT
             echo "passed=true" >> $GITHUB_OUTPUT
-            echo "✅ Все обязательные файлы на месте" >> $GITHUB_OUTPUT
+            echo "All required files exists" >> $GITHUB_OUTPUT
             echo "✅ Структура проверена"
           else
             echo "score=0" >> $GITHUB_OUTPUT
             echo "passed=false" >> $GITHUB_OUTPUT
-            echo "❌ Отсутствуют обязательные файлы" >> $GITHUB_OUTPUT
+            echo "details=Missing required files: pages/, tests/" >> $GITHUB_OUTPUT
             echo "❌ Структура требует доработки"
           fi
       
