@@ -1,9 +1,3 @@
-
----
-
-## 🎁 Бонус: Корневой `README.md`
-
-```markdown
 # 🎓 SauceDemo Playwright — GitHub Classroom Шаблон
 
 Автоматизированная система проверки студенческих проектов по автоматизации тестирования на Playwright.
