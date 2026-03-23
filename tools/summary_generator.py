@@ -21,7 +21,7 @@ class SummaryGenerator:
     """Генератор красивого Summary отчёта для GitHub Actions"""
     
     def __init__(self):
-        self.project_path = Path("student_template")
+        self.project_path = Path(".")
         self.tools_output = Path("tools/output")
     
     def generate_header(self) -> str:
