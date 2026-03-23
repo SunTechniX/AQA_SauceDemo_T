@@ -68,7 +68,7 @@ class CodeAnalyzer:
         for path, description in required_structure.items():
             full_path = self.project_path / path
             exists = full_path.exists()
-            status = f"{Colors.GREEN}✓{Colors.RESET}" if exists else f"{Colors.RED}✗{Colors.RESET}"
+            status = f"{Colors.GREEN}[✓]{Colors.RESET}" if exists else f"{Colors.RED}[✗]{Colors.RESET}"
             print(f"  {status} {description:35} [{path}]")
             checks.append({"name": path, "passed": exists, "description": description})
             if not exists:
@@ -82,7 +82,7 @@ class CodeAnalyzer:
             for file in required_files_in_pages:
                 full_path = pages_dir / file
                 exists = full_path.exists()
-                status = f"{Colors.GREEN}✓{Colors.RESET}" if exists else f"{Colors.RED}✗{Colors.RESET}"
+                status = f"{Colors.GREEN}[✓]{Colors.RESET}" if exists else f"{Colors.RED}[✗]{Colors.RESET}"
                 print(f"    {status} {file}")
                 checks.append({"name": f"pages/{file}", "passed": exists})
                 if not exists:
@@ -96,7 +96,7 @@ class CodeAnalyzer:
             for file in required_files_in_tests:
                 full_path = tests_dir / file
                 exists = full_path.exists()
-                status = f"{Colors.GREEN}✓{Colors.RESET}" if exists else f"{Colors.RED}✗{Colors.RESET}"
+                status = f"{Colors.GREEN}[✓]{Colors.RESET}" if exists else f"{Colors.RED}[✗]{Colors.RESET}"
                 print(f"    {status} {file}")
                 checks.append({"name": f"tests/{file}", "passed": exists})
                 if not exists:
@@ -153,14 +153,14 @@ class CodeAnalyzer:
                 classes = re.findall(r'class\s+(\w+Page)\s*\(', content)
                 if classes:
                     pom_classes_found.extend(classes)
-                    print(f"  {Colors.GREEN}✓{Colors.RESET} Найден класс: {classes[0]} [{py_file.name}]")
+                    print(f"  {Colors.GREEN}[✓]{Colors.RESET} Найден класс: {classes[0]} [{py_file.name}]")
                     checks.append({"file": py_file.name, "classes": classes, "passed": True})
         
         if pom_classes_found:
             print(f"\n  {Colors.BOLD}Всего Page Object классов:{Colors.RESET} {len(pom_classes_found)}")
             score += 5
         else:
-            print(f"  {Colors.RED}✗{Colors.RESET} Не найдены Page Object классы")
+            print(f"  {Colors.RED}[✗]{Colors.RESET} Не найдены Page Object классы")
             all_passed = False
             missing_items.append("Page Object классы не найдены")
         
@@ -171,7 +171,7 @@ class CodeAnalyzer:
                 content = test_file.read_text(encoding="utf-8")
                 if "from pages" in content or "import pages" in content:
                     pom_imports_found = True
-                    print(f"  {Colors.GREEN}✓{Colors.RESET} Тест импортирует Page Objects [{test_file.name}]")
+                    print(f"  {Colors.GREEN}[✓]{Colors.RESET} Тест импортирует Page Objects [{test_file.name}]")
                     break
             
             if pom_imports_found:
@@ -230,7 +230,7 @@ def main():
         results.append(analyzer.check_pom())
     
     total_score = analyzer.get_score()
-    print(f"\n{Colors.BOLD}{Colors.BLUE}{'=' * 60}{Colors.RESET}")
+    print(f"\n{Colors.BOLD}{Colors.BLUE}{'=' * 40}{Colors.RESET}")
     print(f"{Colors.BOLD}ИТОГОВЫЙ БАЛЛ: {total_score} / 100{Colors.RESET}")
     print(f"{Colors.BOLD}{'=' * 60}{Colors.RESET}")
     
