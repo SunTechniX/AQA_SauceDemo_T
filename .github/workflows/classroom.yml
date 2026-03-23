@@ -1,5 +1,6 @@
 # .github/workflows/classroom.yml
-# GitHub Classroom Autograder — Исправленная YAML-версия (Март 2026)
+# GitHub Classroom Autograder — ПОЛНАЯ ВЕРСИЯ (Март 2026)
+# Все категории: auth, cart, e2e, checkout, inventory, ui, performance, cross_browser
 
 name: 🎓 GitHub Classroom Autograder
 
@@ -13,172 +14,112 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   PYTHON_VERSION: '3.12'
-  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
   PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
   PIP_TRUSTED_HOST: pypi.tuna.tsinghua.edu.cn
-  HEADLESS: true
 
+# ─────────────────────────────────────────────────────────────
+# JOB 1: Структура проекта (10 баллов)
+# ─────────────────────────────────────────────────────────────
 jobs:
-  # ─────────────────────────────────────────────────────────────
-  # JOB 1: Структура проекта (10 баллов)
-  # ─────────────────────────────────────────────────────────────
   check-structure:
-    name: "📁 Структура проекта (10 баллов)"
+    name: "📁 Структура (10 баллов)"
     runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     outputs:
       score: ${{ steps.check.outputs.score }}
-      passed: ${{ steps.check.outputs.passed }}
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Проверка структуры
+      - name: Проверка
         id: check
         run: |
           mkdir -p tools/output
-          python tools/code_analyzer.py --check-structure --json > tools/output/structure_result.json 2>&1 || true
-          
-          if grep -q '"passed": true' tools/output/structure_result.json 2>/dev/null; then
+          python tools/check_structure.py > tools/output/structure_result.txt 2>&1
+          if grep -q "PASS" tools/output/structure_result.txt; then
             echo "score=10" >> $GITHUB_OUTPUT
-            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "10" > tools/output/structure_score.txt
           else
             echo "score=0" >> $GITHUB_OUTPUT
-            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "0" > tools/output/structure_score.txt
           fi
-      
-      - name: Вывод в Summary
-        run: |
-          echo "## 📁 Структура проекта" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          python tools/summary_structure.py >> $GITHUB_STEP_SUMMARY || echo "⚠️ Ошибка вывода структуры" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+      - name: Summary
+        run: python tools/write_summary_structure.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
 
   # ─────────────────────────────────────────────────────────────
   # JOB 2: Линтинг (15 баллов)
   # ─────────────────────────────────────────────────────────────
   lint-code:
-    name: "🧹 Линтинг flake8 (15 баллов)"
+    name: "🧹 Линтинг (15 баллов)"
     runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     needs: check-structure
     continue-on-error: true
     outputs:
       score: ${{ steps.lint.outputs.score }}
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Install flake8
-        run: pip install flake8
-      
-      - name: Запуск flake8
+      - run: pip install flake8
+      - name: Запуск
         id: lint
         run: |
           mkdir -p tools/output
-          python -m flake8 . --config=tools/flake8_config.cfg --output-file=tools/output/flake8_report.txt --show-source --statistics 2>&1 || true
-          
+          python -m flake8 . --config=tools/flake8_config.cfg > tools/output/flake8_report.txt 2>&1 || true
           error_count=$(grep -c ":" tools/output/flake8_report.txt 2>/dev/null || echo "0")
           score=$((15 - error_count))
           [ $score -lt 0 ] && score=0
-          
           echo "score=$score" >> $GITHUB_OUTPUT
-          echo "error_count=$error_count" >> $GITHUB_OUTPUT
-      
-      - name: Вывод в Summary
-        run: |
-          echo "## 🧹 Линтинг (flake8)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          error_count=${{ steps.lint.outputs.error_count }}
-          score=${{ steps.lint.outputs.score }}
-          if [ "$error_count" = "0" ]; then
-            echo "✅ **Ошибок не найдено!**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ **Найдено ошибок:** \`$error_count\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            head -10 tools/output/flake8_report.txt 2>/dev/null >> $GITHUB_STEP_SUMMARY || true
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Баллы:** \`$score / 15\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "$score" > tools/output/lint_score.txt
+      - name: Summary
+        run: python tools/write_summary_lint.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
 
   # ─────────────────────────────────────────────────────────────
   # JOB 3: Тесты авторизации (25 баллов)
   # ─────────────────────────────────────────────────────────────
   test-auth:
-    name: "🔐 Тесты авторизации (25 баллов)"
+    name: "🔐 Auth (25 баллов)"
     runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     needs: check-structure
     continue-on-error: true
     outputs:
       score: ${{ steps.test.outputs.score }}
-    
     container:
-      image: mcr.microsoft.com/playwright/python:v1.48.0-jammy
+      image: mcr.microsoft.com/playwright/python:v1.58.0-jammy
       options: --user root
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-html pytest-timeout pytest-json-report
-      
-      - name: Запуск тестов
+      - run: pip install -r requirements.txt pytest pytest-html pytest-timeout pytest-json-report
+      - name: Запуск
         id: test
         run: |
-          mkdir -p output/screenshots
-          mkdir -p output/reports
-          mkdir -p tools/output
-          
-          set +e
-          pytest tests/test_auth.py -v --tb=short --timeout=60 --html=output/reports/auth_report.html --self-contained-html --json-report --json-report-file=tools/output/auth_results.json 2>&1 | tee tools/output/auth_output.txt
-          set -e
-          
-          passed=0
-          if [ -f tools/output/auth_results.json ]; then
-            passed=$(python -c "import json; print(json.load(open('tools/output/auth_results.json')).get('summary', {}).get('passed', 0))" 2>/dev/null) || passed=0
-          fi
-          
-          if [ "$passed" -ge 3 ]; then score=25
-          elif [ "$passed" -gt 0 ]; then score=$((passed * 8))
-          else score=0; fi
-          
+          mkdir -p output/screenshots output/reports tools/output
+          pytest tests/test_auth.py -v --tb=short --timeout=60 \
+            --html=output/reports/auth_report.html --self-contained-html \
+            --json-report --json-report-file=tools/output/auth_results.json \
+            2>&1 | tee tools/output/auth_output.txt || true
+          passed=$(python -c "import json; print(json.load(open('tools/output/auth_results.json')).get('summary',{}).get('passed',0))" 2>/dev/null) || passed=0
+          score=$((passed * 4))
+          [ $score -gt 25 ] && score=25
           echo "score=$score" >> $GITHUB_OUTPUT
-          echo "passed=$passed" >> $GITHUB_OUTPUT
-      
-      - name: Вывод в Summary
-        run: |
-          echo "## 🔐 Тесты авторизации" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          passed=${{ steps.test.outputs.passed }}
-          score=${{ steps.test.outputs.score }}
-          if [ "$passed" -ge 3 ]; then
-            echo "✅ **Все тесты пройдены!** ($passed/3)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ **Пройдено тестов:** \`$passed/3\`" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Баллы:** \`$score / 25\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-      
-      - name: Upload артефактов
+          echo "$score" > tools/output/auth_score.txt
+          echo "$passed" > tools/output/auth_passed.txt
+      - name: Summary
+        run: python tools/write_summary_auth.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+      - name: Upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -186,75 +127,48 @@ jobs:
           path: |
             output/
             tools/output/auth_results.json
+            tools/output/auth_output.txt
           retention-days: 7
 
   # ─────────────────────────────────────────────────────────────
   # JOB 4: Тесты корзины (25 баллов)
   # ─────────────────────────────────────────────────────────────
   test-cart:
-    name: "🛒 Тесты корзины (25 баллов)"
+    name: "🛒 Cart (25 баллов)"
     runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     needs: check-structure
     continue-on-error: true
     outputs:
       score: ${{ steps.test.outputs.score }}
-    
     container:
-      image: mcr.microsoft.com/playwright/python:v1.48.0-jammy
+      image: mcr.microsoft.com/playwright/python:v1.58.0-jammy
       options: --user root
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-html pytest-timeout pytest-json-report
-      
-      - name: Запуск тестов
+      - run: pip install -r requirements.txt pytest pytest-html pytest-timeout pytest-json-report
+      - name: Запуск
         id: test
         run: |
-          mkdir -p output/screenshots
-          mkdir -p output/reports
-          mkdir -p tools/output
-          
-          set +e
-          pytest tests/test_cart.py -v --tb=short --timeout=60 --html=output/reports/cart_report.html --self-contained-html --json-report --json-report-file=tools/output/cart_results.json 2>&1 | tee tools/output/cart_output.txt
-          set -e
-          
-          passed=0
-          if [ -f tools/output/cart_results.json ]; then
-            passed=$(python -c "import json; print(json.load(open('tools/output/cart_results.json')).get('summary', {}).get('passed', 0))" 2>/dev/null) || passed=0
-          fi
-          
-          if [ "$passed" -ge 3 ]; then score=25
-          elif [ "$passed" -gt 0 ]; then score=$((passed * 8))
-          else score=0; fi
-          
+          mkdir -p output/screenshots output/reports tools/output
+          pytest tests/test_cart.py -v --tb=short --timeout=60 \
+            --html=output/reports/cart_report.html --self-contained-html \
+            --json-report --json-report-file=tools/output/cart_results.json \
+            2>&1 | tee tools/output/cart_output.txt || true
+          passed=$(python -c "import json; print(json.load(open('tools/output/cart_results.json')).get('summary',{}).get('passed',0))" 2>/dev/null) || passed=0
+          score=$((passed * 5))
+          [ $score -gt 25 ] && score=25
           echo "score=$score" >> $GITHUB_OUTPUT
-          echo "passed=$passed" >> $GITHUB_OUTPUT
-      
-      - name: Вывод в Summary
-        run: |
-          echo "## 🛒 Тесты корзины" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          passed=${{ steps.test.outputs.passed }}
-          score=${{ steps.test.outputs.score }}
-          if [ "$passed" -ge 3 ]; then
-            echo "✅ **Все тесты пройдены!** ($passed/3)" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "⚠️ **Пройдено тестов:** \`$passed/3\`" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Баллы:** \`$score / 25\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-      
-      - name: Upload артефактов
+          echo "$score" > tools/output/cart_score.txt
+          echo "$passed" > tools/output/cart_passed.txt
+      - name: Summary
+        run: python tools/write_summary_cart.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+      - name: Upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -268,41 +182,33 @@ jobs:
   # JOB 5: E2E тест (25 баллов)
   # ─────────────────────────────────────────────────────────────
   test-e2e:
-    name: "💳 E2E тест (25 баллов)"
+    name: "💳 E2E (25 баллов)"
     runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     needs: [check-structure, test-auth, test-cart]
     continue-on-error: true
     outputs:
       score: ${{ steps.test.outputs.score }}
       passed: ${{ steps.test.outputs.passed }}
-    
     container:
-      image: mcr.microsoft.com/playwright/python:v1.48.0-jammy
+      image: mcr.microsoft.com/playwright/python:v1.58.0-jammy
       options: --user root
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-html pytest-timeout
-      
-      - name: Запуск E2E теста
+      - run: pip install -r requirements.txt pytest pytest-html pytest-timeout
+      - name: Запуск
         id: test
         run: |
-          mkdir -p output/screenshots
-          mkdir -p output/reports
-          mkdir -p tools/output
-          
-          set +e
-          pytest tests/test_checkout.py::test_full_purchase_flow -v --tb=short --timeout=120 --html=output/reports/e2e_report.html --self-contained-html 2>&1 | tee tools/output/e2e_output.txt
-          
+          mkdir -p output/screenshots output/reports tools/output
+          pytest tests/test_e2e.py -v --tb=short --timeout=120 \
+            --html=output/reports/e2e_report.html --self-contained-html \
+            --json-report --json-report-file=tools/output/e2e_results.json \
+            2>&1 | tee tools/output/e2e_output.txt || true
           if grep -q "1 passed" tools/output/e2e_output.txt 2>/dev/null; then
             score=25
             passed=true
@@ -310,27 +216,12 @@ jobs:
             score=0
             passed=false
           fi
-          set -e
-          
           echo "score=$score" >> $GITHUB_OUTPUT
           echo "passed=$passed" >> $GITHUB_OUTPUT
-      
-      - name: Вывод в Summary
-        run: |
-          echo "## 💳 E2E тест (полный цикл)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          passed=${{ steps.test.outputs.passed }}
-          score=${{ steps.test.outputs.score }}
-          if [ "$passed" = "true" ]; then
-            echo "✅ **Тест пройден!**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Тест не пройден**" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Баллы:** \`$score / 25\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-      
-      - name: Upload артефактов
+          echo "$score" > tools/output/e2e_score.txt
+      - name: Summary
+        run: python tools/write_summary_e2e.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+      - name: Upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -338,137 +229,253 @@ jobs:
           path: |
             output/
             tools/output/e2e_output.txt
+            tools/output/e2e_results.json
           retention-days: 7
 
   # ─────────────────────────────────────────────────────────────
-  # JOB 6: Page Object Pattern (10 баллов)
+  # JOB 6: Тесты чекаута (15 баллов, бонус)
   # ─────────────────────────────────────────────────────────────
-  check-pom:
-    name: "🏗️ Page Object Pattern (10 баллов)"
+  test-checkout:
+    name: "📋 Checkout (15 бонус)"
     runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     needs: check-structure
+    continue-on-error: true
     outputs:
-      score: ${{ steps.check.outputs.score }}
-    
+      score: ${{ steps.test.outputs.score }}
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-jammy
+      options: --user root
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Проверка POM
+      - run: pip install -r requirements.txt pytest pytest-html pytest-timeout pytest-json-report
+      - name: Запуск
+        id: test
+        run: |
+          mkdir -p output/screenshots output/reports tools/output
+          pytest tests/test_checkout.py -v --tb=short --timeout=60 \
+            --html=output/reports/checkout_report.html --self-contained-html \
+            --json-report --json-report-file=tools/output/checkout_results.json \
+            2>&1 | tee tools/output/checkout_output.txt || true
+          passed=$(python -c "import json; print(json.load(open('tools/output/checkout_results.json')).get('summary',{}).get('passed',0))" 2>/dev/null) || passed=0
+          score=$((passed * 7))
+          [ $score -gt 15 ] && score=15
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "$score" > tools/output/checkout_score.txt
+      - name: Summary
+        run: python tools/write_summary_checkout.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 7: Тесты товаров (10 баллов, бонус)
+  # ─────────────────────────────────────────────────────────────
+  test-inventory:
+    name: "📦 Inventory (10 бонус)"
+    runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    needs: check-structure
+    continue-on-error: true
+    outputs:
+      score: ${{ steps.test.outputs.score }}
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-jammy
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r requirements.txt pytest pytest-html pytest-timeout pytest-json-report
+      - name: Запуск
+        id: test
+        run: |
+          mkdir -p output/screenshots output/reports tools/output
+          pytest tests/test_inventory.py -v --tb=short --timeout=60 \
+            --html=output/reports/inventory_report.html --self-contained-html \
+            --json-report --json-report-file=tools/output/inventory_results.json \
+            2>&1 | tee tools/output/inventory_output.txt || true
+          passed=$(python -c "import json; print(json.load(open('tools/output/inventory_results.json')).get('summary',{}).get('passed',0))" 2>/dev/null) || passed=0
+          score=$((passed * 2))
+          [ $score -gt 10 ] && score=10
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "$score" > tools/output/inventory_score.txt
+      - name: Summary
+        run: python tools/write_summary_inventory.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 8: Тесты UI (10 баллов, бонус)
+  # ─────────────────────────────────────────────────────────────
+  test-ui:
+    name: "🎨 UI (10 бонус)"
+    runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    needs: check-structure
+    continue-on-error: true
+    outputs:
+      score: ${{ steps.test.outputs.score }}
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-jammy
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r requirements.txt pytest pytest-html pytest-timeout pytest-json-report
+      - name: Запуск
+        id: test
+        run: |
+          mkdir -p output/screenshots output/reports tools/output
+          pytest tests/test_ui.py -v --tb=short --timeout=60 \
+            --html=output/reports/ui_report.html --self-contained-html \
+            --json-report --json-report-file=tools/output/ui_results.json \
+            2>&1 | tee tools/output/ui_output.txt || true
+          passed=$(python -c "import json; print(json.load(open('tools/output/ui_results.json')).get('summary',{}).get('passed',0))" 2>/dev/null) || passed=0
+          score=$((passed * 2))
+          [ $score -gt 10 ] && score=10
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "$score" > tools/output/ui_score.txt
+      - name: Summary
+        run: python tools/write_summary_ui.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 9: Тесты производительности (10 баллов, бонус)
+  # ─────────────────────────────────────────────────────────────
+  test-performance:
+    name: "⚡ Performance (10 бонус)"
+    runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    needs: check-structure
+    continue-on-error: true
+    outputs:
+      score: ${{ steps.test.outputs.score }}
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-jammy
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r requirements.txt pytest pytest-html pytest-timeout pytest-json-report
+      - name: Запуск
+        id: test
+        run: |
+          mkdir -p output/screenshots output/reports tools/output
+          pytest tests/test_performance.py -v --tb=short --timeout=120 \
+            --html=output/reports/performance_report.html --self-contained-html \
+            --json-report --json-report-file=tools/output/performance_results.json \
+            2>&1 | tee tools/output/performance_output.txt || true
+          passed=$(python -c "import json; print(json.load(open('tools/output/performance_results.json')).get('summary',{}).get('passed',0))" 2>/dev/null) || passed=0
+          score=$((passed * 4))
+          [ $score -gt 10 ] && score=10
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "$score" > tools/output/performance_score.txt
+      - name: Summary
+        run: python tools/write_summary_performance.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 10: Кросс-браузер тесты (10 баллов, бонус)
+  # ─────────────────────────────────────────────────────────────
+  test-cross-browser:
+    name: "🌐 Cross-Browser (10 бонус)"
+    runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    needs: check-structure
+    continue-on-error: true
+    outputs:
+      score: ${{ steps.test.outputs.score }}
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.58.0-jammy
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -r requirements.txt pytest pytest-html pytest-timeout pytest-json-report
+      - name: Запуск
+        id: test
+        run: |
+          mkdir -p output/screenshots output/reports tools/output
+          pytest tests/test_cross_browser.py -v --tb=short --timeout=60 \
+            --html=output/reports/cross_browser_report.html --self-contained-html \
+            --json-report --json-report-file=tools/output/cross_browser_results.json \
+            2>&1 | tee tools/output/cross_browser_output.txt || true
+          passed=$(python -c "import json; print(json.load(open('tools/output/cross_browser_results.json')).get('summary',{}).get('passed',0))" 2>/dev/null) || passed=0
+          score=$((passed * 4))
+          [ $score -gt 10 ] && score=10
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "$score" > tools/output/cross_browser_score.txt
+      - name: Summary
+        run: python tools/write_summary_cross_browser.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 11: Page Object Pattern (10 баллов)
+  # ─────────────────────────────────────────────────────────────
+  check-pom:
+    name: "🏗️ POM (10 баллов)"
+    runs-on: ubuntu-22.04
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    needs: check-structure
+    outputs:
+      score: ${{ steps.check.outputs.score }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Проверка
         id: check
         run: |
           mkdir -p tools/output
-          python tools/code_analyzer.py --check-pom --json > tools/output/pom_result.json 2>&1 || true
-          
-          if grep -q '"passed": true' tools/output/pom_result.json 2>/dev/null; then
+          python tools/check_pom.py > tools/output/pom_result.txt 2>&1
+          if grep -q "PASS" tools/output/pom_result.txt; then
             echo "score=10" >> $GITHUB_OUTPUT
+            echo "10" > tools/output/pom_score.txt
           else
             echo "score=0" >> $GITHUB_OUTPUT
+            echo "0" > tools/output/pom_score.txt
           fi
-      
-      - name: Вывод в Summary
-        run: |
-          echo "## 🏗️ Page Object Pattern" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          score=${{ steps.check.outputs.score }}
-          if [ "$score" -eq 10 ]; then
-            echo "✅ **Page Object Pattern используется корректно!**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Page Object Pattern требует доработки**" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Баллы:** \`$score / 10\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+      - name: Summary
+        run: python tools/write_summary_pom.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
 
   # ─────────────────────────────────────────────────────────────
-  # JOB 7: Итоговый Summary
+  # JOB 12: Итоговый Summary
   # ─────────────────────────────────────────────────────────────
   final-summary:
     name: "📊 Итоговый отчёт"
     runs-on: ubuntu-22.04
-    needs: [check-structure, lint-code, test-auth, test-cart, test-e2e, check-pom]
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    needs: [check-structure, lint-code, test-auth, test-cart, test-e2e, test-checkout, test-inventory, test-ui, test-performance, test-cross-browser, check-pom]
     if: always()
-    
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Генерация итогового Summary
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Генерация
         run: |
-          score_structure=${{ needs.check-structure.outputs.score || 0 }}
-          score_lint=${{ needs.lint-code.outputs.score || 0 }}
-          score_auth=${{ needs.test-auth.outputs.score || 0 }}
-          score_cart=${{ needs.test-cart.outputs.score || 0 }}
-          score_e2e=${{ needs.test-e2e.outputs.score || 0 }}
-          score_pom=${{ needs.check-pom.outputs.score || 0 }}
-          
-          total=$((score_structure + score_lint + score_auth + score_cart + score_e2e + score_pom))
-          max_score=110
-          percentage=$((total * 100 / max_score))
-          
-          if [ $total -ge 90 ]; then grade="🟢 Отлично"; status="Зачтено"
-          elif [ $total -ge 70 ]; then grade="🟡 Хорошо"; status="Зачтено"
-          elif [ $total -ge 50 ]; then grade="🟠 Удовлетворительно"; status="Зачтено"
-          else grade="🔴 Требуется доработка"; status="Не зачтено"; fi
-          
-          filled=$((percentage / 5))
-          empty=$((20 - filled))
-          progress=$(printf '🟩%.0s' $(seq 1 $filled))$(printf '⬜%.0s' $(seq 1 $empty))
-          
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# 🏆 ИТОГОВАЯ ОЦЕНКА" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Параметр | Значение |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 💯 Баллы | **$total / $max_score** |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📈 Процент | **$percentage%** |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🎓 Оценка | **$grade** |" >> $GITHUB_STEP_SUMMARY
-          echo "| ✅ Статус | **$status** |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Прогресс" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "\`[$progress]\` $percentage%" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📋 Детализация" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Критерий | Баллы | Статус |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          
-          s1=$([ $score_structure -eq 10 ] && echo "✅" || echo "❌")
-          s2=$([ $score_lint -ge 12 ] && echo "✅" || echo "⚠️")
-          s3=$([ $score_auth -ge 20 ] && echo "✅" || echo "⚠️")
-          s4=$([ $score_cart -ge 20 ] && echo "✅" || echo "⚠️")
-          s5=$([ $score_e2e -eq 25 ] && echo "✅" || echo "❌")
-          s6=$([ $score_pom -eq 10 ] && echo "✅" || echo "❌")
-          
-          echo "| 📁 Структура | $score_structure / 10 | $s1 |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🧹 Линтинг | $score_lint / 15 | $s2 |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔐 Авторизация | $score_auth / 25 | $s3 |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🛒 Корзина | $score_cart / 25 | $s4 |" >> $GITHUB_STEP_SUMMARY
-          echo "| 💳 E2E тест | $score_e2e / 25 | $s5 |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🏗️ POM | $score_pom / 10 | $s6 |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📎 Артефакты" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Доступны в **Actions → Artifacts**." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Тип | Путь |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 📸 Скриншоты | \`output/screenshots/\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📄 Отчёты | \`output/reports/\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📊 JSON | \`tools/output/\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**ИТОГО: $total баллов из $max_score**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "*GitHub Classroom Autograder • 2026.03 • РФ*" >> $GITHUB_STEP_SUMMARY
-      
+          python tools/generate_final_summary.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "**ИТОГО: Ошибка генерации отчёта**" >> $GITHUB_STEP_SUMMARY
       - name: Upload всех артефактов
         if: always()
         uses: actions/upload-artifact@v4
