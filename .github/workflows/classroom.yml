@@ -1,0 +1,638 @@
+# .github/workflows/classroom.yml
+# GitHub Classroom Autograder — Единый файл (Март 2026, РФ)
+# ⚠️ Удалите .github/classroom/autograding.yml если он существует!
+
+name: 🎓 GitHub Classroom Autograder
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.12'
+  PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
+  PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+  PIP_TRUSTED_HOST: pypi.tuna.tsinghua.edu.cn
+  HEADLESS: true
+  PYTEST_TIMEOUT: 120
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1: Проверка структуры проекта (10 баллов)
+  # ─────────────────────────────────────────────────────────────
+  check-structure:
+    name: "📁 Структура проекта (10 баллов)"
+    runs-on: ubuntu-22.04
+    outputs:
+      score: ${{ steps.check.outputs.score }}
+      passed: ${{ steps.check.outputs.passed }}
+      details: ${{ steps.check.outputs.details }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Проверка структуры
+        id: check
+        run: |
+          mkdir -p tools/output
+          python tools/code_analyzer.py --check-structure --json > tools/output/structure_result.json 2>&1 || true
+          
+          # Извлекаем результат
+          if grep -q '"passed": true' tools/output/structure_result.json 2>/dev/null; then
+            echo "score=10" >> $GITHUB_OUTPUT
+            echo "passed=true" >> $GITHUB_OUTPUT
+            echo "✅ Все обязательные файлы на месте" >> $GITHUB_OUTPUT
+            echo "✅ Структура проверена"
+          else
+            echo "score=0" >> $GITHUB_OUTPUT
+            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "❌ Отсутствуют обязательные файлы" >> $GITHUB_OUTPUT
+            echo "❌ Структура требует доработки"
+          fi
+      
+      - name: Сохранение деталей проверки
+        if: always()
+        run: |
+          cat tools/output/structure_result.json >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2: Линтинг кода (15 баллов)
+  # ─────────────────────────────────────────────────────────────
+  lint-code:
+    name: "🧹 Линтинг flake8 (15 баллов)"
+    runs-on: ubuntu-22.04
+    needs: check-structure
+    continue-on-error: true
+    outputs:
+      score: ${{ steps.lint.outputs.score }}
+      error_count: ${{ steps.lint.outputs.error_count }}
+      error_details: ${{ steps.lint.outputs.error_details }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install flake8
+        run: pip install flake8
+      
+      - name: Запуск flake8 с подробным отчётом
+        id: lint
+        run: |
+          mkdir -p tools/output
+          
+          # Запускаем flake8 и сохраняем полный вывод
+          python -m flake8 student_template/ \
+            --config=tools/flake8_config.cfg \
+            --tee \
+            --output-file=tools/output/flake8_report.txt \
+            --show-source \
+            --statistics 2>&1 || true
+          
+          # Подсчёт ошибок
+          error_count=$(grep -c ":" tools/output/flake8_report.txt 2>/dev/null || echo "0")
+          
+          # 15 баллов минус 1 балл за каждую ошибку (минимум 0)
+          score=$((15 - error_count))
+          if [ $score -lt 0 ]; then score=0; fi
+          
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "error_count=$error_count" >> $GITHUB_OUTPUT
+          
+          # Формируем детали для Summary (первые 20 ошибок)
+          error_details=$(head -20 tools/output/flake8_report.txt | tr '\n' '|' || echo "Нет ошибок")
+          echo "error_details<<EOF" >> $GITHUB_OUTPUT
+          echo "$error_details" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "📊 Найдено ошибок: $error_count | Баллы: $score"
+      
+      - name: Вывод ошибок в Summary
+        if: always()
+        run: |
+          echo "## 🧹 Результаты линтинга (flake8)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          error_count=${{ steps.lint.outputs.error_count }}
+          score=${{ steps.lint.outputs.score }}
+          
+          if [ "$error_count" -eq 0 ]; then
+            echo "✅ **Ошибок не найдено!** Код соответствует стандартам PEP8." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Найдено ошибок:** \`$error_count\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Примеры ошибок для исправления:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -15 tools/output/flake8_report.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Не удалось прочитать отчёт" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 **Совет:** Исправьте ошибки по порядку. Запустите локально:" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "flake8 student_template/ --config=tools/flake8_config.cfg --show-source" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Баллы за линтинг:** \`$score / 15\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3: Тесты авторизации (25 баллов)
+  # ─────────────────────────────────────────────────────────────
+  test-auth:
+    name: "🔐 Тесты авторизации (25 баллов)"
+    runs-on: ubuntu-22.04
+    needs: check-structure
+    continue-on-error: true
+    outputs:
+      score: ${{ steps.test.outputs.score }}
+      passed_count: ${{ steps.test.outputs.passed_count }}
+      failed_tests: ${{ steps.test.outputs.failed_tests }}
+    
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.48.0-jammy
+      options: --user root
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-html pytest-timeout pytest-json-report
+      
+      - name: Кэш браузеров
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+      
+      - name: Запуск тестов авторизации
+        id: test
+        run: |
+          mkdir -p student_template/output/screenshots
+          mkdir -p student_template/output/reports
+          mkdir -p tools/output
+          
+          # Запуск тестов
+          set +e
+          pytest student_template/tests/test_auth.py \
+            -v \
+            --tb=short \
+            --timeout=60 \
+            --html=student_template/output/reports/auth_report.html \
+            --self-contained-html \
+            --json-report \
+            --json-report-file=tools/output/auth_results.json 2>&1 | tee tools/output/auth_output.txt
+          set -e
+          
+          # Подсчёт прошедших тестов
+          if [ -f tools/output/auth_results.json ]; then
+            passed=$(python -c "import json; d=json.load(open('tools/output/auth_results.json')); print(d.get('summary', {}).get('passed', 0))" 2>/dev/null || echo "0")
+            failed=$(python -c "import json; d=json.load(open('tools/output/auth_results.json')); print(d.get('summary', {}).get('failed', 0))" 2>/dev/null || echo "0")
+          else
+            passed=0
+            failed=0
+          fi
+          
+          # 25 баллов за 3+ теста, пропорционально за меньше
+          if [ $passed -ge 3 ]; then
+            score=25
+          elif [ $passed -gt 0 ]; then
+            score=$((passed * 8))
+          else
+            score=0
+          fi
+          
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "passed_count=$passed" >> $GITHUB_OUTPUT
+          echo "failed_count=$failed" >> $GITHUB_OUTPUT
+          echo "✅ Пройдено тестов: $passed | Баллы: $score"
+      
+      - name: Вывод результатов тестов в Summary
+        if: always()
+        run: |
+          echo "## 🔐 Тесты авторизации" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          passed=${{ steps.test.outputs.passed_count }}
+          score=${{ steps.test.outputs.score }}
+          
+          if [ "$passed" -ge 3 ]; then
+            echo "✅ **Все тесты пройдены!** ($passed/3)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Пройдено тестов:** \`$passed/3\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Ошибки в тестах:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -A 5 "FAILED\|ERROR" tools/output/auth_output.txt 2>/dev/null | head -20 >> $GITHUB_STEP_SUMMARY || echo "Не удалось извлечь ошибки" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 **Совет:** Проверьте локаторы и ожидания. Используйте \`page.pause()\` для отладки." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Баллы:** \`$score / 25\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Upload артефактов
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-artifacts-${{ github.run_number }}
+          path: |
+            student_template/output/
+            tools/output/auth_results.json
+            tools/output/auth_output.txt
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 4: Тесты корзины (25 баллов)
+  # ─────────────────────────────────────────────────────────────
+  test-cart:
+    name: "🛒 Тесты корзины (25 баллов)"
+    runs-on: ubuntu-22.04
+    needs: check-structure
+    continue-on-error: true
+    outputs:
+      score: ${{ steps.test.outputs.score }}
+      passed_count: ${{ steps.test.outputs.passed_count }}
+    
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.48.0-jammy
+      options: --user root
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-html pytest-timeout pytest-json-report
+      
+      - name: Запуск тестов корзины
+        id: test
+        run: |
+          mkdir -p student_template/output/screenshots
+          mkdir -p student_template/output/reports
+          mkdir -p tools/output
+          
+          set +e
+          pytest student_template/tests/test_cart.py \
+            -v \
+            --tb=short \
+            --timeout=60 \
+            --html=student_template/output/reports/cart_report.html \
+            --self-contained-html \
+            --json-report \
+            --json-report-file=tools/output/cart_results.json 2>&1 | tee tools/output/cart_output.txt
+          set -e
+          
+          if [ -f tools/output/cart_results.json ]; then
+            passed=$(python -c "import json; d=json.load(open('tools/output/cart_results.json')); print(d.get('summary', {}).get('passed', 0))" 2>/dev/null || echo "0")
+          else
+            passed=0
+          fi
+          
+          if [ $passed -ge 3 ]; then
+            score=25
+          elif [ $passed -gt 0 ]; then
+            score=$((passed * 8))
+          else
+            score=0
+          fi
+          
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "passed_count=$passed" >> $GITHUB_OUTPUT
+          echo "✅ Пройдено тестов: $passed | Баллы: $score"
+      
+      - name: Вывод результатов в Summary
+        if: always()
+        run: |
+          echo "## 🛒 Тесты корзины" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          passed=${{ steps.test.outputs.passed_count }}
+          score=${{ steps.test.outputs.score }}
+          
+          if [ "$passed" -ge 3 ]; then
+            echo "✅ **Все тесты пройдены!** ($passed/3)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Пройдено тестов:** \`$passed/3\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Ошибки:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -A 5 "FAILED\|ERROR" tools/output/cart_output.txt 2>/dev/null | head -20 >> $GITHUB_STEP_SUMMARY || echo "Нет данных" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Баллы:** \`$score / 25\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Upload артефактов
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cart-artifacts-${{ github.run_number }}
+          path: |
+            student_template/output/
+            tools/output/cart_results.json
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 5: E2E тест (25 баллов)
+  # ─────────────────────────────────────────────────────────────
+  test-e2e:
+    name: "💳 E2E тест (25 баллов)"
+    runs-on: ubuntu-22.04
+    needs: [check-structure, test-auth, test-cart]
+    continue-on-error: true
+    outputs:
+      score: ${{ steps.test.outputs.score }}
+      passed: ${{ steps.test.outputs.passed }}
+    
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.48.0-jammy
+      options: --user root
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-html pytest-timeout
+      
+      - name: Запуск E2E теста
+        id: test
+        run: |
+          mkdir -p student_template/output/screenshots
+          mkdir -p student_template/output/reports
+          mkdir -p tools/output
+          
+          set +e
+          pytest student_template/tests/test_checkout.py::test_full_purchase_flow \
+            -v \
+            --tb=short \
+            --timeout=120 \
+            --html=student_template/output/reports/e2e_report.html \
+            --self-contained-html 2>&1 | tee tools/output/e2e_output.txt
+          
+          if grep -q "1 passed" tools/output/e2e_output.txt 2>/dev/null; then
+            score=25
+            passed=true
+            echo "✅ E2E тест пройден"
+          else
+            score=0
+            passed=false
+            echo "❌ E2E тест не пройден"
+          fi
+          set -e
+          
+          echo "score=$score" >> $GITHUB_OUTPUT
+          echo "passed=$passed" >> $GITHUB_OUTPUT
+      
+      - name: Вывод результатов в Summary
+        if: always()
+        run: |
+          echo "## 💳 E2E тест (полный цикл покупки)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          passed=${{ steps.test.outputs.passed }}
+          score=${{ steps.test.outputs.score }}
+          
+          if [ "$passed" = "true" ]; then
+            echo "✅ **Тест пройден!** Полный цикл покупки работает корректно." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Тест не пройден**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Ошибка:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -A 10 "FAILED\|ERROR\|AssertionError" tools/output/e2e_output.txt 2>/dev/null | head -25 >> $GITHUB_STEP_SUMMARY || echo "Не удалось извлечь ошибку" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 **Совет:** Проверьте каждый шаг цикла: авторизация → товар → корзина → чекаут → подтверждение." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Баллы:** \`$score / 25\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Upload артефактов
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts-${{ github.run_number }}
+          path: |
+            student_template/output/
+            tools/output/e2e_output.txt
+          retention-days: 7
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 6: Page Object Pattern (10 баллов)
+  # ─────────────────────────────────────────────────────────────
+  check-pom:
+    name: "🏗️ Page Object Pattern (10 баллов)"
+    runs-on: ubuntu-22.04
+    needs: check-structure
+    outputs:
+      score: ${{ steps.check.outputs.score }}
+      pom_details: ${{ steps.check.outputs.pom_details }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Проверка POM
+        id: check
+        run: |
+          mkdir -p tools/output
+          python tools/code_analyzer.py --check-pom --json > tools/output/pom_result.json 2>&1 || true
+          
+          if grep -q '"passed": true' tools/output/pom_result.json 2>/dev/null; then
+            echo "score=10" >> $GITHUB_OUTPUT
+            echo "✅ POM используется"
+          else
+            echo "score=0" >> $GITHUB_OUTPUT
+            echo "❌ POM не используется"
+          fi
+      
+      - name: Вывод результатов в Summary
+        if: always()
+        run: |
+          echo "## 🏗️ Page Object Pattern" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          score=${{ steps.check.outputs.score }}
+          
+          if [ "$score" -eq 10 ]; then
+            echo "✅ **Page Object Pattern используется корректно!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Найдены классы:" >> $GITHUB_STEP_SUMMARY
+            cat tools/output/pom_result.json | python -c "import sys,json; d=json.load(sys.stdin); print('\n'.join(['- ' + c for c in d.get('classes_found', [])]))" 2>/dev/null >> $GITHUB_STEP_SUMMARY || true
+          else
+            echo "❌ **Page Object Pattern не обнаружен или требует доработки**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "💡 **Совет:** Создайте классы в \`student_template/pages/\` с суффиксом \`Page\`:" >> $GITHUB_STEP_SUMMARY
+            echo '```python' >> $GITHUB_STEP_SUMMARY
+            echo "class LoginPage(BasePage):" >> $GITHUB_STEP_SUMMARY
+            echo "    def login(self, username, password):" >> $GITHUB_STEP_SUMMARY
+            echo "        ..." >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Баллы:** \`$score / 10\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 7: Итоговый Summary (0 баллов, но важно!)
+  # ─────────────────────────────────────────────────────────────
+  final-summary:
+    name: "📊 Итоговый отчёт"
+    runs-on: ubuntu-22.04
+    needs: [check-structure, lint-code, test-auth, test-cart, test-e2e, check-pom]
+    if: always()
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Генерация итогового Summary
+        run: |
+          # Собираем все баллы
+          score_structure=${{ needs.check-structure.outputs.score || 0 }}
+          score_lint=${{ needs.lint-code.outputs.score || 0 }}
+          score_auth=${{ needs.test-auth.outputs.score || 0 }}
+          score_cart=${{ needs.test-cart.outputs.score || 0 }}
+          score_e2e=${{ needs.test-e2e.outputs.score || 0 }}
+          score_pom=${{ needs.check-pom.outputs.score || 0 }}
+          
+          total=$((score_structure + score_lint + score_auth + score_cart + score_e2e + score_pom))
+          max_score=110
+          percentage=$((total * 100 / max_score))
+          
+          # Определение оценки
+          if [ $total -ge 90 ]; then
+            grade="🟢 Отлично"
+            emoji="🎉"
+            status="Зачтено"
+          elif [ $total -ge 70 ]; then
+            grade="🟡 Хорошо"
+            emoji="👍"
+            status="Зачтено"
+          elif [ $total -ge 50 ]; then
+            grade="🟠 Удовлетворительно"
+            emoji="📚"
+            status="Зачтено"
+          else
+            grade="🔴 Требуется доработка"
+            emoji="💪"
+            status="Не зачтено"
+          fi
+          
+          # Визуальная шкала прогресса
+          filled=$((percentage / 5))
+          empty=$((20 - filled))
+          progress_bar=$(printf '🟩%.0s' $(seq 1 $filled))$(printf '⬜%.0s' $(seq 1 $empty))
+          
+          # Вывод в Summary
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          
+          ---
+          
+          # 🏆 ИТОГОВАЯ ОЦЕНКА
+          
+          | Параметр | Значение |
+          |----------|----------|
+          | 💯 Баллы | **$total / $max_score** |
+          | 📈 Процент | **$percentage%** |
+          | 🎓 Оценка | **$grade** |
+          | ✅ Статус | **$status** |
+          
+          ## Прогресс
+          
+          \`[$progress_bar]\` $percentage%
+          
+          ## 📋 Детализация по критериям
+          
+          | Критерий | Баллы | Статус |
+          |----------|-------|--------|
+          | 📁 Структура | $score_structure / 10 | $([ $score_structure -eq 10 ] && echo "✅" || echo "❌") |
+          | 🧹 Линтинг | $score_lint / 15 | $([ $score_lint -ge 12 ] && echo "✅" || echo "⚠️") |
+          | 🔐 Авторизация | $score_auth / 25 | $([ $score_auth -ge 20 ] && echo "✅" || echo "⚠️") |
+          | 🛒 Корзина | $score_cart / 25 | $([ $score_cart -ge 20 ] && echo "✅" || echo "⚠️") |
+          | 💳 E2E тест | $score_e2e / 25 | $([ $score_e2e -eq 25 ] && echo "✅" || echo "❌") |
+          | 🏗️ POM | $score_pom / 10 | $([ $score_pom -eq 10 ] && echo "✅" || echo "❌") |
+          
+          ## 📎 Артефакты
+          
+          Все артефакты доступны для скачивания в разделе **Actions → Artifacts**.
+          
+          | Тип | Путь |
+          |-----|------|
+          | 📸 Скриншоты | \`student_template/output/screenshots/\` |
+          | 📄 HTML отчёты | \`student_template/output/reports/\` |
+          | 📊 JSON результаты | \`tools/output/\` |
+          | 🧹 Линтинг отчёт | \`tools/output/flake8_report.txt\` |
+          
+          ---
+          
+          $emoji **ИТОГО: $total баллов из $max_score**
+          
+          *Отчёт сгенерирован автоматически GitHub Classroom Autograder*  
+          *Версия: 2026.03 (адаптировано для РФ)*
+          EOF
+      
+      - name: Запуск генератора красивого отчёта
+        run: |
+          python tools/summary_generator.py >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+      
+      - name: Upload всех артефактов
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-artifacts-${{ github.run_number }}-${{ github.sha }}
+          path: |
+            tools/output/
+            student_template/output/
+          retention-days: 14
