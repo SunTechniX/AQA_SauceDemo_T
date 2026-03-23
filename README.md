@@ -1,4 +1,4 @@
-# 🧪 Ваш проект SauceDemo Playwright
+# 🥫 Проект SauceDemo на Playwright
 
 ## 📋 Задание
 
