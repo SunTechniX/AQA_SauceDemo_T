@@ -33,7 +33,7 @@ class Colors:
 class CodeAnalyzer:
     """Анализатор кода студенческого проекта"""
     
-    def __init__(self, project_path: str = "student_template"):
+    def __init__(self, project_path: str = "."):
         self.project_path = Path(project_path)
         self.results: Dict = {
             "timestamp": datetime.now().isoformat(),
