@@ -94,7 +94,7 @@ jobs:
           mkdir -p tools/output
           
           # Запускаем flake8 и сохраняем полный вывод
-          python -m flake8 student_template/ \
+          python -m flake8 . \
             --config=tools/flake8_config.cfg \
             --tee \
             --output-file=tools/output/flake8_report.txt \
@@ -141,7 +141,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "💡 **Совет:** Исправьте ошибки по порядку. Запустите локально:" >> $GITHUB_STEP_SUMMARY
             echo '```bash' >> $GITHUB_STEP_SUMMARY
-            echo "flake8 student_template/ --config=tools/flake8_config.cfg --show-source" >> $GITHUB_STEP_SUMMARY
+            echo "flake8 ./ --config=tools/flake8_config.cfg --show-source" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
           
@@ -190,17 +190,17 @@ jobs:
       - name: Запуск тестов авторизации
         id: test
         run: |
-          mkdir -p student_template/output/screenshots
-          mkdir -p student_template/output/reports
+          mkdir -p output/screenshots
+          mkdir -p output/reports
           mkdir -p tools/output
           
           # Запуск тестов
           set +e
-          pytest student_template/tests/test_auth.py \
+          pytest tests/test_auth.py \
             -v \
             --tb=short \
             --timeout=60 \
-            --html=student_template/output/reports/auth_report.html \
+            --html=output/reports/auth_report.html \
             --self-contained-html \
             --json-report \
             --json-report-file=tools/output/auth_results.json 2>&1 | tee tools/output/auth_output.txt
@@ -262,7 +262,7 @@ jobs:
         with:
           name: auth-artifacts-${{ github.run_number }}
           path: |
-            student_template/output/
+            output/
             tools/output/auth_results.json
             tools/output/auth_output.txt
           retention-days: 7
@@ -299,16 +299,16 @@ jobs:
       - name: Запуск тестов корзины
         id: test
         run: |
-          mkdir -p student_template/output/screenshots
-          mkdir -p student_template/output/reports
+          mkdir -p output/screenshots
+          mkdir -p output/reports
           mkdir -p tools/output
           
           set +e
-          pytest student_template/tests/test_cart.py \
+          pytest tests/test_cart.py \
             -v \
             --tb=short \
             --timeout=60 \
-            --html=student_template/output/reports/cart_report.html \
+            --html=output/reports/cart_report.html \
             --self-contained-html \
             --json-report \
             --json-report-file=tools/output/cart_results.json 2>&1 | tee tools/output/cart_output.txt
@@ -362,7 +362,7 @@ jobs:
         with:
           name: cart-artifacts-${{ github.run_number }}
           path: |
-            student_template/output/
+            output/
             tools/output/cart_results.json
           retention-days: 7
 
@@ -398,16 +398,16 @@ jobs:
       - name: Запуск E2E теста
         id: test
         run: |
-          mkdir -p student_template/output/screenshots
-          mkdir -p student_template/output/reports
+          mkdir -p output/screenshots
+          mkdir -p output/reports
           mkdir -p tools/output
           
           set +e
-          pytest student_template/tests/test_checkout.py::test_full_purchase_flow \
+          pytest tests/test_checkout.py::test_full_purchase_flow \
             -v \
             --tb=short \
             --timeout=120 \
-            --html=student_template/output/reports/e2e_report.html \
+            --html=output/reports/e2e_report.html \
             --self-contained-html 2>&1 | tee tools/output/e2e_output.txt
           
           if grep -q "1 passed" tools/output/e2e_output.txt 2>/dev/null; then
@@ -456,7 +456,7 @@ jobs:
         with:
           name: e2e-artifacts-${{ github.run_number }}
           path: |
-            student_template/output/
+            output/
             tools/output/e2e_output.txt
           retention-days: 7
 
@@ -509,7 +509,7 @@ jobs:
           else
             echo "❌ **Page Object Pattern не обнаружен или требует доработки**" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "💡 **Совет:** Создайте классы в \`student_template/pages/\` с суффиксом \`Page\`:" >> $GITHUB_STEP_SUMMARY
+            echo "💡 **Совет:** Создайте классы в \`pages/\` с суффиксом \`Page\`:" >> $GITHUB_STEP_SUMMARY
             echo '```python' >> $GITHUB_STEP_SUMMARY
             echo "class LoginPage(BasePage):" >> $GITHUB_STEP_SUMMARY
             echo "    def login(self, username, password):" >> $GITHUB_STEP_SUMMARY
@@ -611,8 +611,8 @@ jobs:
           
           | Тип | Путь |
           |-----|------|
-          | 📸 Скриншоты | \`student_template/output/screenshots/\` |
-          | 📄 HTML отчёты | \`student_template/output/reports/\` |
+          | 📸 Скриншоты | \`output/screenshots/\` |
+          | 📄 HTML отчёты | \`output/reports/\` |
           | 📊 JSON результаты | \`tools/output/\` |
           | 🧹 Линтинг отчёт | \`tools/output/flake8_report.txt\` |
           
@@ -635,5 +635,5 @@ jobs:
           name: all-artifacts-${{ github.run_number }}-${{ github.sha }}
           path: |
             tools/output/
-            student_template/output/
+            output/
           retention-days: 14
